@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 Beat Drop - Interactive Music Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        /* Custom cursor */
+        .cursor {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transition: all 0.1s ease;
+            mix-blend-mode: difference;
+        }
+
+        .cursor-follower {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 9998;
+            transition: all 0.3s ease;
+        }
+
+        /* Main canvas */
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Control panel */
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 20px 40px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            z-index: 100;
+            transition: all 0.3s ease;
+            flex-wrap: wrap;
+            max-width: 90%;
+        }
+
+        .controls:hover {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 40px rgba(255, 255, 255, 0.1);
+        }
+
+        /* Audio controls */
+        .audio-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            padding: 0 20px;
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .slider-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+
+        input[type="range"] {
+            width: 60px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+            border-radius: 2px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        /* Beat indicator */
+        .beat-indicator {
+            width: 20px;
+            height: 20px;
+            background: #ff006e;
+            border-radius: 50%;
+            margin-left: 10px;
+            transition: all 0.1s ease;
+        }
+
+        .beat-indicator.pulse {
+            transform: scale(1.5);
+            background: #fff;
+            box-shadow: 0 0 20px #ff006e;
+        }
+
+        button {
+            background: none;
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        button.active {
+            background: #fff;
+            color: #000;
+        }
+
+        /* Mode selector */
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        /* Info panel */
+        .info {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+        }
+
+        .info h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: hueRotate 5s infinite;
+        }
+
+        @keyframes hueRotate {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .info p {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        /* FPS counter */
+        .fps {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #0f0;
+            z-index: 100;
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        /* Mobile controls */
+        @media (max-width: 768px) {
+            .info h1 { font-size: 1.5em; }
+            .controls { 
+                bottom: 20px; 
+                padding: 15px 20px;
+                gap: 10px;
+            }
+            button { 
+                padding: 8px 15px; 
+                font-size: 12px;
+            }
+            .cursor, .cursor-follower { display: none; }
+            body { cursor: auto; }
+        }
+
+        /* Loading screen */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="loader"></div>
+    </div>
+
+    <div class="cursor" id="cursor"></div>
+    <div class="cursor-follower" id="cursorFollower"></div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="info">
+        <h1>Beat Drop</h1>
+        <p>Interactive Music Visualizer</p>
+        <p id="modeText">Mode: Wave</p>
+    </div>
+
+    <div class="fps" id="fps">60 FPS</div>
+
+    <div class="instructions">
+        Move your mouse • Click to interact • Press SPACE to pause
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">▶ Play</button>
+        
+        <div class="audio-controls">
+            <div class="slider-group">
+                <span class="slider-label">Bass</span>
+                <input type="range" id="bassSlider" min="0" max="200" value="100" onchange="updateBass(this.value)">
+            </div>
+            <div class="slider-group">
+                <span class="slider-label">Mid</span>
+                <input type="range" id="midSlider" min="0" max="200" value="100" onchange="updateMid(this.value)">
+            </div>
+            <div class="slider-group">
+                <span class="slider-label">Treble</span>
+                <input type="range" id="trebleSlider" min="0" max="200" value="100" onchange="updateTreble(this.value)">
+            </div>
+            <div class="slider-group">
+                <span class="slider-label">Volume</span>
+                <input type="range" id="volumeSlider" min="0" max="100" value="30" onchange="updateVolume(this.value)">
+            </div>
+            <div class="beat-indicator" id="beatIndicator"></div>
+        </div>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="setMode('wave')">Wave</button>
+            <button class="mode-btn" onclick="setMode('particles')">Particles</button>
+            <button class="mode-btn" onclick="setMode('spiral')">Spiral</button>
+            <button class="mode-btn" onclick="setMode('bars')">Bars</button>
+            <button class="mode-btn" onclick="setMode('galaxy')">Galaxy</button>
+        </div>
+        <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        // Audio setup
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.8;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        // Audio filters for EQ
+        const bassFilter = audioContext.createBiquadFilter();
+        const midFilter = audioContext.createBiquadFilter();
+        const trebleFilter = audioContext.createBiquadFilter();
+        const masterGain = audioContext.createGain();
+
+        // Setup filters
+        bassFilter.type = 'lowshelf';
+        bassFilter.frequency.value = 320;
+        bassFilter.gain.value = 0;
+
+        midFilter.type = 'peaking';
+        midFilter.frequency.value = 1000;
+        midFilter.Q.value = 0.5;
+        midFilter.gain.value = 0;
+
+        trebleFilter.type = 'highshelf';
+        trebleFilter.frequency.value = 3200;
+        trebleFilter.gain.value = 0;
+
+        masterGain.gain.value = 0.3;
+
+        // Create oscillator for demo
+        let oscillator = null;
+        let oscillator2 = null;
+        let isPlaying = false;
+
+        // Beat detection
+        let beatDetected = false;
+        let previousAudioLevel = 0;
+
+        // Visualization settings
+        let mode = 'wave';
+        let mouseX = width / 2;
+        let mouseY = height / 2;
+        let targetMouseX = width / 2;
+        let targetMouseY = height / 2;
+        let time = 0;
+        let particles = [];
+        let stars = [];
+
+        // FPS counter
+        let fps = 60;
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        // Initialize stars for galaxy mode
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 200; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 2,
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        // Create demo audio with smooth musical sound
+        function createDemoAudio() {
+            try {
+                // Main bass oscillator
+                oscillator = audioContext.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(110, audioContext.currentTime); // A2 note
+                
+                // Harmony oscillator
+                oscillator2 = audioContext.createOscillator();
+                oscillator2.type = 'sine';
+                oscillator2.frequency.setValueAtTime(220, audioContext.currentTime); // A3 note
+                
+                // Create individual gains
+                const gain1 = audioContext.createGain();
+                const gain2 = audioContext.createGain();
+                
+                gain1.gain.value = 0.3;
+                gain2.gain.value = 0.2;
+                
+                // Connect oscillators
+                oscillator.connect(gain1);
+                oscillator2.connect(gain2);
+                
+                // Mix through filters
+                gain1.connect(bassFilter);
+                gain2.connect(bassFilter);
+                
+                bassFilter.connect(midFilter);
+                midFilter.connect(trebleFilter);
+                trebleFilter.connect(masterGain);
+                masterGain.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                // Start oscillators
+                oscillator.start();
+                oscillator2.start();
+                
+                // Create smooth musical patterns
+                let noteIndex = 0;
+                const notes = [110, 130.81, 146.83, 110, 98, 110, 146.83, 130.81]; // A minor progression
+                const harmonies = [220, 261.63, 293.66, 220, 196, 220, 293.66, 261.63];
+                
+                setInterval(() => {
+                    if (isPlaying) {
+                        const now = audioContext.currentTime;
+                        
+                        // Smooth frequency transitions
+                        oscillator.frequency.setTargetAtTime(notes[noteIndex], now, 0.1);
+                        oscillator2.frequency.setTargetAtTime(harmonies[noteIndex], now, 0.1);
+                        
+                        // Gentle volume envelope
+                        gain1.gain.setValueAtTime(0.4, now);
+                        gain1.gain.exponentialRampToValueAtTime(0.3, now + 0.5);
+                        
+                        gain2.gain.setValueAtTime(0.3, now);
+                        gain2.gain.exponentialRampToValueAtTime(0.2, now + 0.5);
+                        
+                        noteIndex = (noteIndex + 1) % notes.length;
+                    }
+                }, 500); // Slower, more musical tempo
+                
+            } catch (error) {
+                console.error('Audio creation error:', error);
+            }
+        }
+
+        // EQ Control functions
+        function updateBass(value) {
+            const gain = (value - 100) / 100 * 20; // -20 to +20 dB
+            bassFilter.gain.setValueAtTime(gain, audioContext.currentTime);
+        }
+
+        function updateMid(value) {
+            const gain = (value - 100) / 100 * 20;
+            midFilter.gain.setValueAtTime(gain, audioContext.currentTime);
+        }
+
+        function updateTreble(value) {
+            const gain = (value - 100) / 100 * 20;
+            trebleFilter.gain.setValueAtTime(gain, audioContext.currentTime);
+        }
+
+        function updateVolume(value) {
+            masterGain.gain.setValueAtTime(value / 100, audioContext.currentTime);
+        }
+
+        // Toggle play/pause
+        function togglePlay() {
+            if (!oscillator) {
+                createDemoAudio();
+            }
+            
+            isPlaying = !isPlaying;
+            const playBtn = document.getElementById('playBtn');
+            
+            if (isPlaying) {
+                audioContext.resume();
+                playBtn.textContent = '⏸ Pause';
+                playBtn.classList.add('active');
+            } else {
+                audioContext.suspend();
+                playBtn.textContent = '▶ Play';
+                playBtn.classList.remove('active');
+            }
+        }
+
+        // Set visualization mode
+        function setMode(newMode) {
+            mode = newMode;
+            document.getElementById('modeText').textContent = `Mode: ${newMode.charAt(0).toUpperCase() + newMode.slice(1)}`;
+            
+            // Update button states
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            if (mode === 'galaxy') {
+                initStars();
+            }
+        }
+
+        // Visualization functions
+        function drawWave() {
+            ctx.strokeStyle = `hsl(${time % 360}, 70%, 50%)`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            const sliceWidth = width / bufferLength;
+            let x = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * height / 2 + Math.sin(time * 0.01 + i * 0.1) * 50;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            ctx.stroke();
+        }
+
+        function drawParticles() {
+            // Add new particles
+            if (particles.length < 100) {
+                for (let i = 0; i < 5; i++) {
+                    particles.push({
+                        x: mouseX + (Math.random() - 0.5) * 50,
+                        y: mouseY + (Math.random() - 0.5) * 50,
+                        vx: (Math.random() - 0.5) * 5,
+                        vy: (Math.random() - 0.5) * 5,
+                        size: Math.random() * 5 + 2,
+                        hue: time % 360
+                    });
+                }
+            }
+            
+            // Update and draw particles
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.size *= 0.98;
+                
+                const audioIntensity = dataArray[Math.floor(Math.random() * bufferLength)] / 255;
+                const size = p.size * (1 + audioIntensity);
+                
+                ctx.fillStyle = `hsla(${p.hue}, 70%, 50%, ${p.size / 10})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                return p.size > 0.5;
+            });
+        }
+
+        function drawSpiral() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            ctx.strokeStyle = `hsl(${time % 360}, 70%, 50%)`;
+            ctx.lineWidth = 2;
+            
+            for (let j = 0; j < 3; j++) {
+                ctx.beginPath();
+                for (let i = 0; i < bufferLength; i++) {
+                    const audioValue = dataArray[i] / 255;
+                    const angle = (i / bufferLength) * Math.PI * 4 + time * 0.01 + j * Math.PI * 2 / 3;
+                    const radius = 50 + audioValue * 200 + j * 30;
+                    
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            }
+        }
+
+        function drawBars() {
+            const barWidth = width / bufferLength * 2.5;
+            let x = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = (dataArray[i] / 255) * height * 0.8;
+                const hue = (i / bufferLength) * 360 + time;
+                
+                ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                ctx.fillRect(x, height - barHeight, barWidth - 2, barHeight);
+                
+                // Mirror effect
+                ctx.fillStyle = `hsla(${hue}, 70%, 50%, 0.3)`;
+                ctx.fillRect(x, 0, barWidth - 2, barHeight * 0.3);
+                
+                x += barWidth;
+            }
+        }
+
+        function drawGalaxy() {
+            // Draw stars
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > height) star.y = 0;
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw galaxy spiral
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            for (let arm = 0; arm < 5; arm++) {
+                ctx.beginPath();
+                for (let i = 0; i < bufferLength; i++) {
+                    const audioValue = dataArray[i] / 255;
+                    const angle = (i / bufferLength) * Math.PI * 2 + arm * Math.PI * 2 / 5 + time * 0.001;
+                    const radius = i * 0.8 + audioValue * 100;
+                    
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius;
+                    
+                    const hue = (arm * 72 + time) % 360;
+                    ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${1 - i / bufferLength})`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2 + audioValue * 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update FPS
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+                document.getElementById('fps').textContent = `${fps} FPS`;
+            }
+            
+            // Get audio data
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Beat detection
+            let currentAudioLevel = 0;
+            for (let i = 0; i < 10; i++) { // Check low frequencies for beat
+                currentAudioLevel += dataArray[i];
+            }
+            currentAudioLevel /= 10;
+            
+            if (currentAudioLevel > previousAudioLevel + 30 && currentAudioLevel > 150) {
+                beatDetected = true;
+                document.getElementById('beatIndicator').classList.add('pulse');
+                setTimeout(() => {
+                    document.getElementById('beatIndicator').classList.remove('pulse');
+                }, 100);
+            }
+            previousAudioLevel = currentAudioLevel;
+            
+            // Smooth mouse movement
+            mouseX += (targetMouseX - mouseX) * 0.1;
+            mouseY += (targetMouseY - mouseY) * 0.1;
+            
+            // Clear canvas with trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw based on mode
+            switch (mode) {
+                case 'wave':
+                    drawWave();
+                    break;
+                case 'particles':
+                    drawParticles();
+                    break;
+                case 'spiral':
+                    drawSpiral();
+                    break;
+                case 'bars':
+                    drawBars();
+                    break;
+                case 'galaxy':
+                    drawGalaxy();
+                    break;
+            }
+            
+            time++;
+        }
+
+        // Event listeners
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            if (mode === 'galaxy') initStars();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            targetMouseX = e.clientX;
+            targetMouseY = e.clientY;
+            
+            // Update custom cursor
+            const cursor = document.getElementById('cursor');
+            const cursorFollower = document.getElementById('cursorFollower');
+            cursor.style.left = e.clientX - 10 + 'px';
+            cursor.style.top = e.clientY - 10 + 'px';
+            cursorFollower.style.left = e.clientX - 20 + 'px';
+            cursorFollower.style.top = e.clientY - 20 + 'px';
+        });
+
+        window.addEventListener('click', () => {
+            // Create explosion effect
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: mouseX,
+                    y: mouseY,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    size: Math.random() * 10 + 5,
+                    hue: Math.random() * 360
+                });
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+            }
+        });
+
+        // Fullscreen
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Initialize
+        initStars();
+        setTimeout(() => {
+            document.getElementById('loading').classList.add('hidden');
+        }, 1000);
+        animate();
+    </script>
+</body>
+</html>
